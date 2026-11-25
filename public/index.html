@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Christmas Gift Draw</title>
+<style>
+:root{--bg:#fff7f3;--card:#fff;--tx:#2b1a1a;--mut:#7a6564;--red:#c4302b;--grn:#1f6b46;--bd:#ead9d4}
+@media (prefers-color-scheme:dark){:root{--bg:#1a1112;--card:#261a1b;--tx:#f6e9e6;--mut:#b49c99;--red:#e55b55;--grn:#4fb583;--bd:#3d2a2b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.45}
+main{max-width:640px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:1.6rem;margin:.2em 0;text-align:center}
+.sub,.msg{text-align:center;color:var(--mut)}
+.sub{margin:0 0 18px}.msg{padding:8px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px;margin-bottom:14px}
+input,textarea{width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit;margin:4px 0 10px}
+#code{text-align:center;font-size:1.4rem;letter-spacing:.2em;text-transform:uppercase}
+label{font-size:.85rem;color:var(--mut)}
+button{padding:10px 16px;border:1px solid var(--bd);border-radius:10px;background:var(--card);color:var(--tx);font:inherit;cursor:pointer;margin-right:6px}
+button.p{background:var(--red);border-color:var(--red);color:#fff;font-weight:600}
+button:disabled{opacity:.6}
+.row{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bd)}
+.code{font-family:ui-monospace,monospace;font-weight:700;letter-spacing:.1em;color:var(--grn)}
+.reel{display:flex;gap:8px;justify-content:center;margin:16px 0}
+.dig{width:64px;height:84px;border-radius:12px;background:var(--red);color:#fff;font-size:3rem;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 -6px 0 rgba(0,0,0,.2)}
+.dig.stop{background:var(--grn);animation:pop .4s}
+@keyframes pop{50%{transform:scale(1.15)}}
+.res{text-align:center}.res h2{margin:.2em 0;font-size:1.7rem}
+.kv{text-align:left;margin-top:12px}.kv div{padding:6px 0;border-bottom:1px solid var(--bd)}
+.kv b{display:inline-block;min-width:110px;color:var(--mut)}
+.err{color:var(--red)}.hide{display:none}
+.snow{position:fixed;top:-10px;color:#fff;pointer-events:none;animation:fall linear forwards;text-shadow:0 0 3px #9ab}
+@keyframes fall{to{transform:translateY(110vh)}}
+table{width:100%;border-collapse:collapse;font-size:.92rem}th,td{padding:8px 6px;border-bottom:1px solid var(--bd);text-align:left}th{color:var(--mut);font-weight:600;font-size:.8rem}.wrap{overflow-x:auto}.ok{color:var(--grn);font-weight:700}.no{color:var(--mut)}.warn{color:var(--red)}.sum{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0;font-size:.9rem}.org{text-align:center;margin-top:24px}.org a{color:var(--mut);font-size:.85rem;cursor:pointer}
+</style>
+</head>
+<body>
+<main>
+<h1>🎄 Christmas Gift Draw</h1>
+<p class="sub">Draw your number. Keep it secret!</p>
+
+<div id="vDraw">
+  <div class="card">
+    <label for="code">Enter your personal code</label>
+    <input id="code" maxlength="8" autocomplete="off" autocapitalize="characters" placeholder="K7M2QX">
+    <button class="p" id="go">Open</button>
+  </div>
+  <div id="out"></div>
+</div>
+
+<div id="vAdmin" class="hide">
+  <div class="card" id="login">
+    <label for="pw">Organizer password</label>
+    <input id="pw" type="password">
+    <button class="p" id="enter">Enter</button>
+    <div class="msg err" id="lerr"></div>
+  </div>
+  <div id="panel" class="hide">
+    <div class="card"><b>Add participant</b>
+      <div class="msg">Just the name. A personal code is made automatically. Each person fills in their own details using that code.</div>
+      <input id="newName" placeholder="Full name"><button class="p" id="addB">Add</button></div>
+    <div class="card"><b>Who has drawn?</b>
+      <div class="sum" id="sum"></div>
+      <div class="wrap"><table><thead><tr><th>#</th><th>Name</th><th>Code</th><th>Details</th><th>Drawn?</th><th></th></tr></thead><tbody id="tb"></tbody></table></div>
+      <div class="msg" id="empty"></div>
+      <div><button id="refB">↻ Refresh</button><button id="copyB">Copy codes</button></div>
+      <div class="msg">Updates by itself every 10 seconds. "Details" = wishlist, shirt, shoe and color filled (of 4).</div></div>
+    <div class="card" id="gen"></div>
+  </div>
+</div>
+<div class="org"><a id="toggle">Organizer</a></div>
+</main>
+<script>
+var $=function(i){return document.getElementById(i)};
+function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
+async function api(o){
+  var r=await fetch("/api/app",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(o)});
+  var j={};try{j=await r.json()}catch(e){}
+  if(!r.ok)throw new Error(j.error||"Something went wrong");
+  return j;
+}
+function snow(){for(var i=0;i<30;i++){var s=el("div","snow","❄");s.style.left=Math.random()*100+"vw";s.style.fontSize=(10+Math.random()*16)+"px";s.style.animationDuration=(3+Math.random()*3)+"s";s.style.animationDelay=Math.random()*1.5+"s";document.body.appendChild(s);setTimeout(function(x){x.remove()}.bind(null,s),7000)}}
+
+/* ---------- Participant ---------- */
+function resultCard(r){
+  var d=el("div","card res");
+  d.appendChild(el("div","msg","You are the gift-giver for"));
+  d.appendChild(el("h2",null,"#"+r.number+" · "+r.rName));
+  var kv=el("div","kv");
+  [["Wishlist",r.wishlist],["Shirt size",r.shirt],["Shoe size",r.shoe],["Favorite color",r.color],["Notes",r.notes]].forEach(function(p){
+    var row=el("div");row.appendChild(el("b",null,p[0]+":"));row.appendChild(document.createTextNode(" "+(p[1]||"—")));kv.appendChild(row)});
+  d.appendChild(kv);return d;
+}
+var FIELDS=[["wishlist","Wishlist"],["shirt","Shirt size"],["shoe","Shoe size"],["color","Favorite color"],["notes","Notes"]];
+function profileCard(k,r){
+  var c=el("div","card");
+  c.appendChild(el("b",null,"✏️ My details"));
+  c.appendChild(el("div","msg","Fill this in so your gift-giver knows what you like. You can edit it anytime."));
+  var F={};
+  FIELDS.forEach(function(f){
+    c.appendChild(el("label",null,f[1]));
+    var i=(f[0]==="wishlist"||f[0]==="notes")?el("textarea"):el("input");i.rows=3;i.value=r.profile[f[0]]||"";F[f[0]]=i;c.appendChild(i)});
+  var s=el("button","p","Save my details");c.appendChild(s);
+  s.onclick=async function(){
+    var o={action:"save",code:k};for(var x in F)o[x]=F[x].value;
+    s.disabled=true;s.textContent="Saving…";
+    try{await api(o);s.textContent="Saved ✓"}catch(e){s.textContent="Failed. Try again"}
+    setTimeout(function(){s.disabled=false;s.textContent="Save my details"},1800);
+  };
+  return c;
+}
+function drawCard(k,out){
+  var card=el("div","card res"),reel=el("div","reel"),digs=[];
+  for(var i=0;i<2;i++){var g=el("div","dig","?");digs.push(g);reel.appendChild(g)}
+  var btn=el("button","p","🎲 Draw my number!");
+  card.append(el("div","msg","The draw is ready! Press the button."),reel,btn);
+  btn.onclick=async function(){
+    btn.disabled=true;btn.textContent="Drawing…";
+    var res;
+    try{res=await api({action:"reveal",code:k})}catch(e){btn.disabled=false;btn.textContent="Try again";return}
+    var n=String(res.number);
+    while(digs.length<n.length){var g=el("div","dig","?");digs.push(g);reel.appendChild(g)}
+    var t=n.padStart(digs.length,"0").split("");
+    var timers=digs.map(function(g){return setInterval(function(){g.textContent=Math.floor(Math.random()*10)},60)});
+    digs.forEach(function(g,i){setTimeout(function(){
+      clearInterval(timers[i]);g.textContent=t[i];g.className="dig stop";
+      if(i===digs.length-1)setTimeout(function(){snow();var rc=resultCard(res);card.replaceWith(rc)},700);
+    },1500+i*900)});
+  };
+  return card;
+}
+function showMe(k,r){
+  var out=$("out");out.textContent="";
+  out.appendChild(el("div","msg","Hi, "+r.name+"!"));
+  var prof=profileCard(k,r);
+  if(!r.drawn){
+    var w=el("div","card res");w.appendChild(el("div",null,"🎁 The draw hasn't started yet."));
+    w.appendChild(el("div","msg","Fill in your details below. Come back with your code after the organizer announces the draw."));
+    out.append(w,prof);
+  }else if(r.revealed){
+    out.appendChild(el("div","msg","You already drew. Here is your result again (only your code shows it)."));
+    out.append(resultCard(r.result),prof);
+  }else{
+    out.append(drawCard(k,out),prof);
+  }
+}
+$("go").onclick=async function(){
+  var k=$("code").value.trim().toUpperCase();if(!k)return;
+  $("out").textContent="";
+  try{showMe(k,await api({action:"open",code:k}))}
+  catch(e){$("out").appendChild(el("div","msg err",e.message))}
+};
+$("code").addEventListener("keydown",function(e){if(e.key==="Enter")$("go").click()});
+
+/* ---------- Organizer ---------- */
+var PW="",LAST=null,TIMER=null;
+$("toggle").onclick=function(){var a=$("vAdmin").classList.contains("hide");$("vAdmin").classList.toggle("hide",!a);$("vDraw").classList.toggle("hide",a);$("toggle").textContent=a?"Back to draw":"Organizer"};
+$("enter").onclick=async function(){
+  PW=$("pw").value;$("lerr").textContent="";
+  try{var r=await api({action:"list",pw:PW});$("login").classList.add("hide");$("panel").classList.remove("hide");paint(r);
+    TIMER=setInterval(function(){if(!document.hidden&&!$("vAdmin").classList.contains("hide"))refresh()},10000)}
+  catch(e){$("lerr").textContent=e.message}
+};
+async function refresh(){try{paint(await api({action:"list",pw:PW}))}catch(e){}}
+async function act(o){try{await api(Object.assign({pw:PW},o));await refresh()}catch(e){alert(e.message)}}
+$("refB").onclick=refresh;
+$("addB").onclick=async function(){var v=$("newName").value.trim();if(!v)return;await act({action:"add",name:v});$("newName").value=""};
+$("newName").addEventListener("keydown",function(e){if(e.key==="Enter")$("addB").click()});
+$("copyB").onclick=function(){
+  if(!LAST)return;var t=LAST.people.map(function(x){return x.name+": "+x.code}).join("\n");
+  if(navigator.clipboard)navigator.clipboard.writeText(t).then(function(){$("copyB").textContent="Copied ✓";setTimeout(function(){$("copyB").textContent="Copy codes"},1500)})};
+function paint(r){
+  LAST=r;
+  var n=r.people.length,dn=r.people.filter(function(x){return x.revealed}).length,full=r.people.filter(function(x){return x.filled===4}).length;
+  var s=$("sum");s.textContent="";
+  s.appendChild(el("span",r.drawn?"ok":"no","Drawn: "+(r.drawn?dn+" / "+n:"draw not generated yet")));
+  s.appendChild(el("span",null,"Details complete: "+full+" / "+n));
+  var tb=$("tb");tb.textContent="";
+  r.people.forEach(function(x,i){
+    var tr=el("tr");
+    tr.appendChild(el("td",null,i+1));tr.appendChild(el("td",null,x.name));tr.appendChild(el("td","code",x.code));
+    tr.appendChild(el("td",x.filled===4?"ok":(x.filled?"":"warn"),x.filled+"/4"));
+    tr.appendChild(el("td",!r.drawn?"no":(x.revealed?"ok":"warn"),!r.drawn?"—":(x.revealed?"✓ Drawn":"Not yet")));
+    var td=el("td");
+    if(!r.drawn){var d=el("button",null,"✕");d.onclick=function(){if(confirm("Remove "+x.name+"?"))act({action:"remove",id:x.id})};td.appendChild(d)}
+    tr.appendChild(td);tb.appendChild(tr)});
+  $("empty").textContent=n?"":"No participants yet.";
+  var g=$("gen");g.textContent="";
+  g.appendChild(el("b",null,r.drawn?"Draw is ready":"Run the draw"));
+  g.appendChild(el("div","msg",r.drawn?"Codes stay the same. Redrawing after anyone has drawn needs you to type RESET.":"Needs at least 3 people. Nobody draws themselves. Do this once most people have filled in their details."));
+  var run=el("button","p",r.drawn?"Redraw":"🎲 Generate draw");
+  run.onclick=function(){
+    var o={action:"generate"};
+    if(r.drawn){var c=prompt("This wipes the results and shuffles again.\nType RESET to confirm (leave blank if nobody has drawn yet):");if(c===null)return;o.confirm=c}
+    act(o)};
+  g.appendChild(run);
+  if(r.drawn){var rs=el("button",null,"Reset draw (unlock list)");rs.onclick=function(){var c=prompt("Type RESET to remove the draw and unlock the list:");if(c)act({action:"reset",confirm:c})};g.appendChild(rs)}
+}
+</script>
+</body>
+</html>
